@@ -1,0 +1,1 @@
+# ambari-with-ansible-on-sles12
