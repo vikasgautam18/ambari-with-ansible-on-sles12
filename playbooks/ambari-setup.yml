@@ -1,0 +1,172 @@
+- name: install and set up ambari
+  hosts: ambari
+  become: True
+  tasks: 
+    - name: Add HDP repo  
+      zypper_repository:
+        repo: 'http://public-repo-1.hortonworks.com/ambari/sles12/2.x/updates/2.7.4.0/ambari.repo'
+        state: present
+        disable_gpg_check : yes
+        runrefresh: yes
+      ignore_errors: true
+      tags:
+        - packages
+    - name: Add SLES12 SP5 python repo
+      zypper_repository:
+        repo: 'https://download.opensuse.org/repositories/devel:languages:python/SLE_12_SP5/devel:languages:python.repo'
+        state: present
+      ignore_errors: true
+      tags:
+        - packages
+    - name: Refresh all repos
+      zypper_repository:
+        repo: '*'
+        runrefresh: yes
+      tags:
+        - packages
+
+    - name: install openJDK1.8
+      zypper: name=java-1_8_0-openjdk update_cache=yes state=present
+      tags:
+        - packages
+
+    - name: install ambari server
+      zypper: name=ambari-server update_cache=yes state=present
+      tags:
+        - packages
+
+    - name: install postgress dependencies
+      zypper: name=postgresql10-contrib update_cache=yes state=present
+      tags:
+        - packages
+
+    - name: Download postgres library
+      get_url:
+        url: https://jdbc.postgresql.org/download/postgresql-42.2.14.jar
+        dest: /var/lib/pgsql/
+        mode: '0755'
+      tags:
+        - packages
+
+    - name: Make sure postgres service is running
+      systemd:
+        state: started
+        name: postgresql
+      tags:
+        - postgres-setup
+    - name: Create a new database with name ambari and specific encoding and locale settings.
+      postgresql_db:
+        name: ambari
+        encoding: UTF-8
+        lc_collate: de_DE.UTF-8
+        lc_ctype: de_DE.UTF-8
+        template: template0
+      become_user: postgres
+      tags:
+        - postgres-setup
+    - name: Connect to ambari database, create ambari user, and grant access to database
+      postgresql_user:
+        db: ambari
+        name: ambari
+        password: welcome123
+        priv: "ALL"
+        expires: "Jan 31 2030"
+      become_user: postgres
+      tags:
+        - postgres-setup
+    - name: Create Schema ambari
+      postgresql_query:
+        db: ambari
+        query: CREATE SCHEMA IF NOT EXISTS ambari AUTHORIZATION ambari; ALTER SCHEMA ambari OWNER TO ambari; ALTER ROLE ambari SET search_path to 'ambari', 'public';
+      become_user: postgres
+      tags:
+        - postgres-setup
+
+    - name: set up ambari with openjdk and postgres default settings
+      shell: "ambari-server setup --java-home /usr/lib64/jvm/jre-openjdk --jdbc-db=postgres --jdbc-driver=/var/lib/pgsql/postgresql-42.2.14.jar"
+      register: view_results
+    - debug: var=view_results.stdout_lines
+    
+    - name: Set the Ambari Server database setup options
+      set_fact:
+              external_hostname: localhost
+              postgres_port: 5432
+              ambari_db_name: ambari
+              ambari_db_username: ambari
+              ambari_db_password: welcome123
+      tags:
+        - set-variables
+
+    - name: create pgpass file
+      template:
+        src: pgpass.j2
+        dest: /tmp/.pgpass-ambari
+        mode: 0600
+        force: yes
+      tags:
+        - set-variables
+
+    - name: Check if the postgres schema was already uploaded (SUSE)
+      shell: "PGPASSFILE=/tmp/.pgpass-ambari psql -h localhost -U ambari -p 5432 -w -d ambari -c 'select user_id from ambari.users limit 0;'"
+      register: check_results
+      ignore_errors: true
+    - debug: var=check_results.stdout_lines
+
+    - name: Load the Ambari Server postgres schema (SUSE)
+      shell: "PGPASSFILE=/tmp/.pgpass-ambari psql -h localhost -U ambari -p 5432 -w -d ambari < /var/lib/ambari-server/resources/Ambari-DDL-Postgres-CREATE.sql"
+      when: check_results is failed
+
+    - name: Delete the .pgpass file (SUSE)
+      file:
+        path: /tmp/.pgpass-ambari
+        state: absent 
+
+    - name: Set the Ambari Server database setup options
+      set_fact:
+        ambari_database_options: "--database='postgres' \
+                                  --databasehost=localhost \
+                                  --databaseport=5432 \
+                                  --databasename=ambari \
+                                  --databaseusername=ambari \
+                                  --databasepassword=welcome123"
+
+
+    - name: Set the Ambari Server Java setup option (OpenJDK)
+      set_fact:
+        ambari_java_options: "-j /usr/lib64/jvm/jre-openjdk"
+
+    - name: Run Ambari Server setup
+      shell: /usr/sbin/ambari-server setup -s {{ ambari_java_options }} {{ ambari_database_options }}
+    
+    - name: Ensure SELinux is set to enforcing mode
+      lineinfile:
+        path: /etc/ambari-server/conf/ambari.properties
+        regexp: '^server.jdbc.url='
+        line: server.jdbc.url=jdbc:postgresql://localhost:5432/ambari
+      become: True
+      tags:
+        - update-file
+      notify: restart ambari-server
+
+    - name: Ensure SELinux is set to enforcing mode
+      lineinfile:
+        path: /etc/ambari-server/conf/ambari.properties
+        regexp: '^server.jdbc.rca.url='
+        line: server.jdbc.url=jdbc:postgresql://localhost:5432/ambari
+      become: True
+      tags:
+        - update-file
+      notify: restart ambari-server
+
+  handlers:
+    - name: restart ambari-server
+      service:
+        name: ambari-server
+        state: restarted
+      notify: Wait for Ambari Server to start
+
+    - name: Wait for Ambari Server to start
+      wait_for:
+        port: 8080
+        host: 0.0.0.0
+        delay: 1
