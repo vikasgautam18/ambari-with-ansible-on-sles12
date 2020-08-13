@@ -40,6 +40,16 @@
       tags:
         - packages
 
+    - name: create folder for download
+      file:
+        path: /var/lib/pgsql/
+        state: directory     
+        recurse: yes
+        owner: postgres
+        group: postgres
+      tags:
+        - packages
+        
     - name: Download postgres library
       get_url:
         url: https://jdbc.postgresql.org/download/postgresql-42.2.14.jar
@@ -48,12 +58,30 @@
       tags:
         - packages
 
+    - name: create postgres data dir
+      shell: "{{ item }}"
+      with_items:
+        - mkdir /data/postgres
+        - chown -R postgres:postgres /data/postgres
+        - chmod 700 /data/postgres
+        - echo  'POSTGRES_DATADIR="/data/postgres"' >> /etc/sysconfig/postgresql
+        - systemctl enable postgresql
+
     - name: Make sure postgres service is running
       systemd:
         state: started
         name: postgresql
       tags:
         - postgres-setup
+    - name: create postgres data dir
+      shell: "{{ item }}"
+      with_items:
+        - cp /data/config/pg_hba.conf /data/postgres/
+        - cp /data/config/postgresql.conf /data/postgres/
+        - chown -R postgres:postgres /data/postgres/
+        - chmod -R 700 /data/postgres
+        - systemctl restart postgresql
+
     - name: Create a new database with name ambari and specific encoding and locale settings.
       postgresql_db:
         name: ambari
@@ -138,7 +166,7 @@
     - name: Run Ambari Server setup
       shell: /usr/sbin/ambari-server setup -s {{ ambari_java_options }} {{ ambari_database_options }}
     
-    - name: Ensure SELinux is set to enforcing mode
+    - name: Update jdbc url in ambari.properties
       lineinfile:
         path: /etc/ambari-server/conf/ambari.properties
         regexp: '^server.jdbc.url='
@@ -148,7 +176,7 @@
         - update-file
       notify: restart ambari-server
 
-    - name: Ensure SELinux is set to enforcing mode
+    - name: update jdbc.rca.url in ambari.properties
       lineinfile:
         path: /etc/ambari-server/conf/ambari.properties
         regexp: '^server.jdbc.rca.url='
