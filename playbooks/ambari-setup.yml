@@ -39,6 +39,10 @@
       zypper: name=postgresql10-contrib update_cache=yes state=present
       tags:
         - packages
+    - name: install ambari agent
+      zypper: name=ambari-agent update_cache=yes state=present
+      tags:
+        - packages
 
     - name: create folder for download
       file:
@@ -61,7 +65,7 @@
     - name: create postgres data dir
       shell: "{{ item }}"
       with_items:
-        - mkdir /data/postgres
+        - mkdir -p /data/postgres
         - chown -R postgres:postgres /data/postgres
         - chmod 700 /data/postgres
         - echo  'POSTGRES_DATADIR="/data/postgres"' >> /etc/sysconfig/postgresql
@@ -186,6 +190,16 @@
         - update-file
       notify: restart ambari-server
 
+    - name: update ambari-agent.ini
+      lineinfile:
+        path: /etc/ambari-agent/conf/ambari-agent.ini
+        regexp: '^hostname='
+        line: hostname=ambari-a.us-central1-a.c.vikas-project-266722.internal
+      become: True
+      tags:
+        - update-file
+      notify: restart ambari-agent
+
   handlers:
     - name: restart ambari-server
       service:
@@ -196,5 +210,16 @@
     - name: Wait for Ambari Server to start
       wait_for:
         port: 8080
+        host: 0.0.0.0
+        delay: 1
+
+    - name: restart ambari-agent
+      shell: "ambari-agent restart"
+      become: true
+      notify: Wait for Ambari Agent to start
+
+    - name: Wait for Ambari Agent to start
+      wait_for:
+        port: 8440
         host: 0.0.0.0
         delay: 1
