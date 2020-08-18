@@ -1,6 +1,11 @@
 - name: install and set up ambari
-  hosts: ambari
+  hosts: snvm
   become: True
+  vars:
+    v_pckgs:
+      - krb5
+      - krb5-server
+      - krb5-client 
   tasks: 
     - name: Add HDP repo  
       zypper_repository:
@@ -15,6 +20,8 @@
       zypper_repository:
         repo: 'https://download.opensuse.org/repositories/devel:languages:python/SLE_12_SP5/devel:languages:python.repo'
         state: present
+        disable_gpg_check : yes
+        runrefresh: yes
       ignore_errors: true
       tags:
         - packages
@@ -43,6 +50,14 @@
       zypper: name=ambari-agent update_cache=yes state=present
       tags:
         - packages
+    - name: install python-psycopg2
+      zypper: name=python-psycopg2 update_cache=yes state=present
+      tags:
+        - packages
+    - name: install kdc packages
+      zypper: name={{ v_pckgs }} update_cache=yes state=present
+      tags:
+        - kdc
 
     - name: create folder for download
       file:
@@ -77,15 +92,28 @@
         name: postgresql
       tags:
         - postgres-setup
+    - name: Copy file with owner and permissions
+      copy:
+        src: pg_hba.conf
+        dest: /data/postgres/
+        owner: postgres
+        group: postgres
+        mode: '0700'
+      tags:
+        - postgres-setup
+    - name: Copy file with owner and permissions
+      copy:
+        src: postgresql.conf
+        dest: /data/postgres/
+        owner: postgres
+        group: postgres
+        mode: '0700'
+      tags:
+        - postgres-setup
     - name: create postgres data dir
-      shell: "{{ item }}"
-      with_items:
-        - cp /data/config/pg_hba.conf /data/postgres/
-        - cp /data/config/postgresql.conf /data/postgres/
-        - chown -R postgres:postgres /data/postgres/
-        - chmod -R 700 /data/postgres
-        - systemctl restart postgresql
-
+      shell: "systemctl restart postgresql"
+      tags:
+        - postgres-setup
     - name: Create a new database with name ambari and specific encoding and locale settings.
       postgresql_db:
         name: ambari
@@ -194,7 +222,7 @@
       lineinfile:
         path: /etc/ambari-agent/conf/ambari-agent.ini
         regexp: '^hostname='
-        line: hostname=ambari-a.us-central1-a.c.vikas-project-266722.internal
+        line: hostname=snvm-a.us-central1-a.c.vikas-project-266722.internal
       become: True
       tags:
         - update-file

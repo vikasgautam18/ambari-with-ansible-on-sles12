@@ -1,0 +1,13 @@
+- name: install and set up ambari
+  hosts: snvm
+  become: True
+  tasks: 
+    - name: Copy file with owner and permissions
+      copy:
+        src: pg_hba.conf
+        dest: /tmp/
+        owner: postgres
+        group: postgres
+        mode: '0755'
+
+
