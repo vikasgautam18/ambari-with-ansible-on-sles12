@@ -33,6 +33,11 @@ gray() {
 }
 
 
+ts()
+{
+    yellow $(echo "`date +%Y-%m-%d,%H:%M:%S`")
+}
+
 function stop_service() {
 
 service_name=$1

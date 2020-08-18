@@ -109,14 +109,11 @@ rm -rf /usr/lib/ambari-metrics-hadoop-sink
 rm -rf /usr/lib/ambari-metrics-kafka-sink
 rm -rf /usr/lib/ams-hbase
 
-#zypper -n rm krb5-server krb5-client
-#rm -rf /var/lib/kerberos
-#rm -rf /etc/krb5.conf
-#rm -rf /var/log/krb5
-#rm -rf /var/lib/systemd/migrated/krb5kdc
-
+zypper -n rm krb5-server krb5-client
+rm -rf /var/lib/kerberos
+rm -rf /etc/krb5.conf
+rm -rf /var/log/krb5
+rm -rf /var/lib/systemd/migrated/krb5kdc
 
 zypper rm libsnappy1-1.1.3-1.2.x86_64
 zypper rm snappy-devel-1.1.3-1.2.x86_64
-
-
