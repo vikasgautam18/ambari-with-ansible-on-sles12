@@ -51,6 +51,15 @@ zypper se --repo HDP-UTILS-1.1.0.22-repo-1 --installed | awk '/^i(\+|\s)/ {print
 echo "$(date +"%Y_%m_%d_%H_%M_%S") : INFO : removing all packages from repo ambari-2.7.4.0"
 zypper se --repo ambari-2.7.4.0 --installed | awk '/^i(\+|\s)/ {print $3}' | xargs zypper -n rm
 
+echo "$(date +"%Y_%m_%d_%H_%M_%S") : INFO : removing additional packaegs"
+zypper -n rm postgresql10-contrib java-1_8_0-openjdk python-psycopg2
+
+echo "$(date +"%Y_%m_%d_%H_%M_%S") : INFO : removing repo ambari-2.7.4.0"
+zypper rr ambari-2.7.4.0
+
+echo "$(date +"%Y_%m_%d_%H_%M_%S") : INFO : removing repo devel_languages_python "
+zypper rr devel_languages_python
+
 echo "$(date +"%Y_%m_%d_%H_%M_%S") : INFO : cleaning up /var/log/"
 rm -rf /var/log/ambari-metrics-monitor
 rm -rf /var/log/ambari-agent
