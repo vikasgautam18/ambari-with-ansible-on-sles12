@@ -4,7 +4,7 @@ SERVER=localhost
 PORT=8080
 USERNAME=admin
 PASSWORD=admin
-CLUSTERNAME=kerberosCluster
+CLUSTERNAME=vikasTest
 SERVICE=$1
 
 ENDPOINT="http://${SERVER}:${PORT}/api/v1/clusters/${CLUSTERNAME}/services/${SERVICE}"
